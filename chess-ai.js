@@ -31,41 +31,58 @@ class ChessAI {
         if (!piece) return [];
 
         const moves = [];
-        const directions = this.getPieceDirections(piece.piece);
+        if (piece.piece === 'pawn') {
+            // Direction: white moves up (-1), black moves down (+1)
+            const dir = piece.color === 'white' ? -1 : 1;
+            const startRow = piece.color === 'white' ? 6 : 1;
+            // Single forward
+            if (this.isEmpty(board, row + dir, col)) {
+                moves.push({ row: row + dir, col });
+                // Double forward from starting position
+                if (row === startRow && this.isEmpty(board, row + 2 * dir, col)) {
+                    moves.push({ row: row + 2 * dir, col });
+                }
+            }
+            // Captures
+            for (const dc of [-1, 1]) {
+                const targetRow = row + dir;
+                const targetCol = col + dc;
+                if (this.isInBounds(targetRow, targetCol) && board[targetRow][targetCol] && board[targetRow][targetCol].color !== piece.color) {
+                    moves.push({ row: targetRow, col: targetCol });
+                }
+            }
+            // TODO: En passant, promotion
+            return moves.filter(m => this.isInBounds(m.row, m.col));
+        }
 
+        const directions = this.getPieceDirections(piece.piece);
         for (const [dx, dy] of directions) {
             let newRow = row + dy;
             let newCol = col + dx;
-
-            // Check if the move is within bounds
-            while (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+            while (this.isInBounds(newRow, newCol)) {
                 const targetSquare = board[newRow][newCol];
-                
-                // If square is empty, add move
                 if (!targetSquare) {
                     moves.push({ row: newRow, col: newCol });
-                }
-                // If square has enemy piece, add capture move and stop
-                else if (targetSquare.color !== piece.color) {
+                } else if (targetSquare.color !== piece.color) {
                     moves.push({ row: newRow, col: newCol });
                     break;
-                }
-                // If square has friendly piece, stop
-                else {
+                } else {
                     break;
                 }
-
-                // For pieces that can't move multiple squares, break after first move
-                if (piece.piece === 'knight' || piece.piece === 'king') {
-                    break;
-                }
-
+                if (piece.piece === 'knight' || piece.piece === 'king') break;
                 newRow += dy;
                 newCol += dx;
             }
         }
-
         return moves;
+    }
+
+    isEmpty(board, row, col) {
+        return this.isInBounds(row, col) && !board[row][col];
+    }
+
+    isInBounds(row, col) {
+        return row >= 0 && row < 8 && col >= 0 && col < 8;
     }
 
     // Get movement directions for each piece type
