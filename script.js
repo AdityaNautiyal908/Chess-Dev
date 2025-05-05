@@ -10,20 +10,28 @@ const pvpBtn = document.getElementById('pvpBtn');
 const pvcBtn = document.getElementById('pvcBtn');
 const backToMenu = document.getElementById('backToMenu');
 
+// Initialize sound manager
+const soundManager = new SoundManager();
+
 // Navigation functions
 function showScreen(screen) {
     startScreen.classList.add('hidden');
     gameModeScreen.classList.add('hidden');
     gameScreen.classList.add('hidden');
     screen.classList.remove('hidden');
+    
+    // Add entrance animation
+    screen.classList.add('animate__animated', 'animate__fadeIn');
 }
 
 // Event listeners for navigation
 playBtn.addEventListener('click', () => {
+    soundManager.play('buttonClick');
     showScreen(gameModeScreen);
 });
 
 quitBtn.addEventListener('click', () => {
+    soundManager.play('buttonClick');
     if (window.electron) {
         window.electron.quit();
     } else {
@@ -32,15 +40,18 @@ quitBtn.addEventListener('click', () => {
 });
 
 backToMenu.addEventListener('click', () => {
+    soundManager.play('buttonClick');
     showScreen(startScreen);
 });
 
 pvpBtn.addEventListener('click', () => {
+    soundManager.play('gameStart');
     showScreen(gameScreen);
     initializeGame('pvp');
 });
 
 pvcBtn.addEventListener('click', () => {
+    soundManager.play('gameStart');
     showScreen(gameScreen);
     initializeGame('pvc');
 });
@@ -83,8 +94,11 @@ class ChessGame {
         this.selectedPiece = null;
         this.currentPlayer = 'white';
         this.gameMode = gameMode;
+        this.ai = gameMode === 'pvc' ? new ChessAI() : null;
+        this.moveHistory = [];
         this.initializeBoard();
         this.setupEventListeners();
+        this.updatePlayerInfo();
     }
 
     initializeBoard() {
@@ -109,6 +123,10 @@ class ChessGame {
                     square.textContent = PIECES[color][piece];
                     square.dataset.piece = piece;
                     square.dataset.color = color;
+                    
+                    // Add entrance animation for pieces
+                    square.classList.add('animate__animated', 'animate__fadeIn');
+                    square.style.animationDelay = `${(row * 8 + col) * 0.05}s`;
                 }
 
                 this.board.appendChild(square);
@@ -121,23 +139,49 @@ class ChessGame {
             const square = e.target.closest('div[data-row]');
             if (!square) return;
 
+            // Don't allow moves if it's computer's turn in PVC mode
+            if (this.gameMode === 'pvc' && this.currentPlayer === 'black') {
+                return;
+            }
+
             this.handleSquareClick(square);
         });
 
         // Game control buttons
         document.getElementById('newGame').addEventListener('click', () => {
+            soundManager.play('buttonClick');
             this.initializeBoard();
             this.currentPlayer = 'white';
+            this.moveHistory = [];
+            this.updatePlayerInfo();
         });
 
         document.getElementById('undo').addEventListener('click', () => {
-            // TODO: Implement undo functionality
-            console.log('Undo clicked');
+            soundManager.play('buttonClick');
+            this.undoLastMove();
         });
 
         document.getElementById('resign').addEventListener('click', () => {
+            soundManager.play('gameOver');
             showScreen(startScreen);
         });
+    }
+
+    updatePlayerInfo() {
+        const whitePlayer = document.querySelector('.player.white');
+        const blackPlayer = document.querySelector('.player.black');
+        
+        if (this.gameMode === 'pvc') {
+            whitePlayer.querySelector('.player-name').textContent = 'Player';
+            blackPlayer.querySelector('.player-name').textContent = 'Computer';
+        } else {
+            whitePlayer.querySelector('.player-name').textContent = 'Player 1';
+            blackPlayer.querySelector('.player-name').textContent = 'Player 2';
+        }
+
+        // Highlight current player
+        whitePlayer.classList.toggle('active', this.currentPlayer === 'white');
+        blackPlayer.classList.toggle('active', this.currentPlayer === 'black');
     }
 
     handleSquareClick(square) {
@@ -147,25 +191,29 @@ class ChessGame {
         // If no piece is selected and clicked square has a piece of current player's color
         if (!this.selectedPiece && piece && color === this.currentPlayer) {
             this.selectedPiece = square;
-            square.classList.add('selected');
+            square.classList.add('selected', 'animate__animated', 'animate__pulse');
+            soundManager.play('buttonClick');
         }
         // If a piece is already selected
         else if (this.selectedPiece) {
             // If clicking the same piece, deselect it
             if (this.selectedPiece === square) {
-                this.selectedPiece.classList.remove('selected');
+                this.selectedPiece.classList.remove('selected', 'animate__pulse');
                 this.selectedPiece = null;
+                soundManager.play('buttonClick');
             }
             // If clicking a different square, try to move the piece
             else {
-                // TODO: Implement move validation
+                const isCapture = square.dataset.piece !== undefined;
                 this.movePiece(this.selectedPiece, square);
-                this.selectedPiece.classList.remove('selected');
+                this.selectedPiece.classList.remove('selected', 'animate__pulse');
                 this.selectedPiece = null;
+
+                // Play appropriate sound
+                soundManager.play(isCapture ? 'capture' : 'move');
 
                 // If in computer mode and it's computer's turn
                 if (this.gameMode === 'pvc' && this.currentPlayer === 'black') {
-                    // TODO: Implement computer move
                     setTimeout(() => this.makeComputerMove(), 500);
                 }
             }
@@ -173,7 +221,26 @@ class ChessGame {
     }
 
     movePiece(fromSquare, toSquare) {
-        // TODO: Implement proper move validation
+        // Store move in history
+        this.moveHistory.push({
+            from: {
+                row: parseInt(fromSquare.dataset.row),
+                col: parseInt(fromSquare.dataset.col),
+                piece: fromSquare.dataset.piece,
+                color: fromSquare.dataset.color
+            },
+            to: {
+                row: parseInt(toSquare.dataset.row),
+                col: parseInt(toSquare.dataset.col),
+                piece: toSquare.dataset.piece,
+                color: toSquare.dataset.color
+            }
+        });
+
+        // Add move animation
+        toSquare.classList.add('animate__animated', 'animate__fadeIn');
+        
+        // Move the piece
         toSquare.textContent = fromSquare.textContent;
         toSquare.dataset.piece = fromSquare.dataset.piece;
         toSquare.dataset.color = fromSquare.dataset.color;
@@ -184,11 +251,49 @@ class ChessGame {
 
         // Switch turns
         this.currentPlayer = this.currentPlayer === 'white' ? 'black' : 'white';
+        this.updatePlayerInfo();
+    }
+
+    undoLastMove() {
+        if (this.moveHistory.length === 0) return;
+
+        const lastMove = this.moveHistory.pop();
+        const fromSquare = this.board.children[lastMove.from.row * 8 + lastMove.from.col];
+        const toSquare = this.board.children[lastMove.to.row * 8 + lastMove.to.col];
+
+        // Restore the moved piece
+        fromSquare.textContent = PIECES[lastMove.from.color][lastMove.from.piece];
+        fromSquare.dataset.piece = lastMove.from.piece;
+        fromSquare.dataset.color = lastMove.from.color;
+
+        // Restore the captured piece (if any)
+        if (lastMove.to.piece) {
+            toSquare.textContent = PIECES[lastMove.to.color][lastMove.to.piece];
+            toSquare.dataset.piece = lastMove.to.piece;
+            toSquare.dataset.color = lastMove.to.color;
+        } else {
+            toSquare.textContent = '';
+            toSquare.dataset.piece = '';
+            toSquare.dataset.color = '';
+        }
+
+        // Switch turns back
+        this.currentPlayer = this.currentPlayer === 'white' ? 'black' : 'white';
+        this.updatePlayerInfo();
     }
 
     makeComputerMove() {
-        // TODO: Implement computer move logic
-        console.log('Computer is thinking...');
+        if (this.ai) {
+            const move = this.ai.makeMove(this);
+            if (move) {
+                const fromSquare = this.board.children[move.from.row * 8 + move.from.col];
+                const toSquare = this.board.children[move.to.row * 8 + move.to.col];
+                const isCapture = toSquare.dataset.piece !== undefined;
+                
+                this.movePiece(fromSquare, toSquare);
+                soundManager.play(isCapture ? 'capture' : 'move');
+            }
+        }
     }
 }
 
