@@ -106,6 +106,7 @@ class ChessGame {
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
                 const square = document.createElement('div');
+                square.classList.add('square');
                 square.dataset.row = row;
                 square.dataset.col = col;
                 
@@ -188,11 +189,16 @@ class ChessGame {
         const piece = square.dataset.piece;
         const color = square.dataset.color;
 
+        // Remove previous highlights
+        this.clearHighlights();
+
         // If no piece is selected and clicked square has a piece of current player's color
         if (!this.selectedPiece && piece && color === this.currentPlayer) {
             this.selectedPiece = square;
             square.classList.add('selected', 'animate__animated', 'animate__pulse');
             soundManager.play('buttonClick');
+            // Highlight possible moves
+            this.highlightPossibleMoves(square);
         }
         // If a piece is already selected
         else if (this.selectedPiece) {
@@ -201,6 +207,7 @@ class ChessGame {
                 this.selectedPiece.classList.remove('selected', 'animate__pulse');
                 this.selectedPiece = null;
                 soundManager.play('buttonClick');
+                this.clearHighlights();
             }
             // If clicking a different square, try to move the piece
             else {
@@ -208,16 +215,56 @@ class ChessGame {
                 this.movePiece(this.selectedPiece, square);
                 this.selectedPiece.classList.remove('selected', 'animate__pulse');
                 this.selectedPiece = null;
-
+                this.clearHighlights();
                 // Play appropriate sound
                 soundManager.play(isCapture ? 'capture' : 'move');
-
                 // If in computer mode and it's computer's turn
                 if (this.gameMode === 'pvc' && this.currentPlayer === 'black') {
                     setTimeout(() => this.makeComputerMove(), 500);
                 }
             }
         }
+    }
+
+    highlightPossibleMoves(square) {
+        const row = parseInt(square.dataset.row);
+        const col = parseInt(square.dataset.col);
+        const piece = square.dataset.piece;
+        const color = square.dataset.color;
+        if (!piece || !color) return;
+        // Use AI move generator for consistency
+        const boardState = this.getBoardState();
+        let moves = [];
+        if (this.ai) {
+            moves = this.ai.getPossibleMoves(boardState, row, col);
+        } else {
+            // For PvP, use a simple move generator (reuse AI logic)
+            moves = (new ChessAI()).getPossibleMoves(boardState, row, col);
+        }
+        moves.forEach(move => {
+            const target = this.board.querySelector(`.square[data-row='${move.row}'][data-col='${move.col}']`);
+            if (target) target.classList.add('highlight');
+        });
+    }
+
+    clearHighlights() {
+        this.board.querySelectorAll('.highlight').forEach(sq => sq.classList.remove('highlight'));
+    }
+
+    getBoardState() {
+        const board = Array(8).fill().map(() => Array(8).fill(null));
+        const squares = this.board.children;
+        for (let i = 0; i < squares.length; i++) {
+            const square = squares[i];
+            const row = parseInt(square.dataset.row);
+            const col = parseInt(square.dataset.col);
+            const piece = square.dataset.piece;
+            const color = square.dataset.color;
+            if (piece && color) {
+                board[row][col] = { piece, color };
+            }
+        }
+        return board;
     }
 
     movePiece(fromSquare, toSquare) {
