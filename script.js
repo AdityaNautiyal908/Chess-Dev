@@ -209,18 +209,29 @@ class ChessGame {
                 soundManager.play('buttonClick');
                 this.clearHighlights();
             }
-            // If clicking a different square, try to move the piece
-            else {
-                const isCapture = square.dataset.piece !== undefined;
-                this.movePiece(this.selectedPiece, square);
+            // If clicking another of your own pieces, switch selection
+            else if (piece && color === this.currentPlayer) {
                 this.selectedPiece.classList.remove('selected', 'animate__pulse');
-                this.selectedPiece = null;
-                this.clearHighlights();
-                // Play appropriate sound
-                soundManager.play(isCapture ? 'capture' : 'move');
-                // If in computer mode and it's computer's turn
-                if (this.gameMode === 'pvc' && this.currentPlayer === 'black') {
-                    setTimeout(() => this.makeComputerMove(), 500);
+                this.selectedPiece = square;
+                square.classList.add('selected', 'animate__animated', 'animate__pulse');
+                soundManager.play('buttonClick');
+                this.highlightPossibleMoves(square);
+            }
+            // If clicking a valid destination (empty or opponent's piece)
+            else {
+                const isCapture = square.dataset.piece !== undefined && color !== this.currentPlayer;
+                // Only allow move if destination is empty or opponent's piece
+                if (!piece || (piece && color !== this.currentPlayer)) {
+                    this.movePiece(this.selectedPiece, square);
+                    this.selectedPiece.classList.remove('selected', 'animate__pulse');
+                    this.selectedPiece = null;
+                    this.clearHighlights();
+                    // Play appropriate sound
+                    soundManager.play(isCapture ? 'capture' : 'move');
+                    // If in computer mode and it's computer's turn
+                    if (this.gameMode === 'pvc' && this.currentPlayer === 'black') {
+                        setTimeout(() => this.makeComputerMove(), 500);
+                    }
                 }
             }
         }
