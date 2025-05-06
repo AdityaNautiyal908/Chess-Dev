@@ -11,5 +11,8 @@
   "license": "ISC",
   "devDependencies": {
     "electron": "^28.1.0"
+  },
+  "dependencies": {
+    "chess.js": "^1.2.0"
   }
-} 
+}
